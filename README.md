@@ -6,6 +6,7 @@ If the components of a robot procedure being executed in a bio-foundry are as fo
 2. A system-level execution manager that decides what job to do next and passes the job to an appropriate robot
 3. A client on the robot that receives job requests and, if accepted, initiates execution on the robot
 4. A low-level layer that converts job instructions to the actuation of motors
+
 Bot-Host is #3
 
 ## Features
