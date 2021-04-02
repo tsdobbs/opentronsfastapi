@@ -1,14 +1,13 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-from bot import opentrons_execute, default_routes
 import asyncio
 import opentrons.execute as oe
 import opentrons.simulate as os
+import bot
+bot.opentrons_env = oe
 
 app = FastAPI()
-global opentrons_env
-opentrons_env = os
-app.include_router(default_routes)
+app.include_router(bot.default_routes)
 
 ##################### Build time #######################
 
@@ -18,10 +17,10 @@ class DispenseWell(BaseModel):
     uuid: str
 
 @app.post("/api/procedure/demo_procedure")
-@opentrons_execute()
+@bot.opentrons_execute()
 def demo_procedure(dispenseWell:DispenseWell):
     asyncio.set_event_loop(asyncio.new_event_loop())
-    ctx = opentrons_env.get_protocol_api('2.9')
+    ctx = bot.opentrons_env.get_protocol_api('2.9')
 
     ctx.home()
     plate = ctx.load_labware("corning_96_wellplate_360ul_flat", 1)

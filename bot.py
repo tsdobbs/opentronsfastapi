@@ -12,6 +12,7 @@ import inspect
 from fastapi import APIRouter
 default_routes = APIRouter()
 
+global opentrons_env
 opentrons_env = os
 
 # Setup sqlite3 lock
