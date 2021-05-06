@@ -3,12 +3,12 @@ import asyncio
 import time
 import threading
 import sqlite3
+import inspect
+import hashlib
 import opentrons.execute as oe
 import opentrons.simulate as os
 from typing import List
 from functools import wraps
-import inspect
-import hashlib
 
 from fastapi import APIRouter
 default_routes = APIRouter()
@@ -86,8 +86,11 @@ class BaseThread(threading.Thread):
             self.callback()
 
 #Decorator that executes the function in a seperate thread
-def opentrons_execute(msg = "Execution initiated"):
+def opentrons_execute(version = False, msg = "Execution initiated"):
     def outer(func):
+        if version:
+            return {"Protocol": func.__name__, "ver": get_protocol_hash(func)}
+
         @wraps(func)
         def inner(*args, **kwargs):
             lock = get_lock(func.__name__)
@@ -137,4 +140,3 @@ def test_home_func():
     asyncio.set_event_loop(asyncio.new_event_loop())
     ctx = opentrons_env.get_protocol_api('2.9')
     ctx.home()
-
