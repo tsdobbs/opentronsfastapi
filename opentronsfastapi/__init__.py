@@ -10,11 +10,14 @@ import opentrons.simulate as os
 from typing import List
 from functools import wraps
 
-from fastapi import APIRouter
+from fastapi import FastAPI, APIRouter, Depends
+
+default_app = FastAPI()
 default_routes = APIRouter()
 
 global opentrons_env
 opentrons_env = os
+
 
 # Setup sqlite3 lock
 conn = sqlite3.connect("lock.db")
@@ -86,31 +89,48 @@ class BaseThread(threading.Thread):
             self.callback()
 
 #Decorator that executes the function in a seperate thread
-def opentrons_execute(version = False, msg = "Execution initiated"):
+def opentrons_execute(msg = "Execution initiated", apiLevel='2.9', version_flag = None):
     def outer(func):
-        if version:
-            return {"Protocol": func.__name__, "ver": get_protocol_hash(func)}
-
         @wraps(func)
-        def inner(*args, **kwargs):
+        async def inner(*args, **kwargs):
+            #Option to return just version hash if specified.
+            if version_flag and version_flag in kwargs and kwargs[version_flag]==True:
+                return {"Protocol": func.__name__, "ver": get_protocol_hash(func)}
+
             lock = get_lock(func.__name__)
             if lock == False:
                 return {"Message": "App currently locked"}
 
-            # Since we have acquired the lock, we can reset global variable opentrons
+            # Since we have acquired the lock, we can reset global variable opentrons_env
             global opentrons_env
             ot = opentrons_env
             try:
                 opentrons_env = os
+                ctx = opentrons_env.get_protocol_api(apiLevel)
+                kwargs['protocol'] = ctx
                 func(*args, **kwargs)
             except Exception as e:
                 unlock()
                 return {"Message": str(e), "ver":get_protocol_hash(func)}
             opentrons_env = ot
+            ctx = opentrons_env.get_protocol_api(apiLevel)
+            ctx.home()
+            kwargs['protocol'] = ctx
+
             BaseThread(target=func, callback=unlock, args=args, kwargs=kwargs).start()
             return {"Message": msg, "ver":get_protocol_hash(func)}
         return inner
     return outer
+
+
+# Placeholder function that allows opentrons_execute to provide a protocol context at runtime
+# A pretty gnarly hack to make FastAPI work in a way it wasn't intended
+# Sending it a "Depends" parameter ensures that param isn't exposed on the server
+# Then at runtime we replace this parameter with the correct protocol context
+def protocol_ctx_hold():
+    def placeholder_func():
+        pass
+    return Depends(placeholder_func)
 
 
 ### Test funcs ####
@@ -125,10 +145,8 @@ def test_unlock():
 
 @default_routes.get("/test/lock")
 @opentrons_execute(msg="Lock acquired for 10 seconds. Will be instant if not executing on real machine")
-def test_lock_func():
-    asyncio.set_event_loop(asyncio.new_event_loop())
-    ctx = opentrons_env.get_protocol_api('2.9')
-    ctx.delay(10)
+def test_lock_func(protocol = protocol_ctx_hold()):
+    protocol.delay(10)
 
 @default_routes.get("/test/lock_state")
 def test_lock_state_func():
@@ -136,7 +154,5 @@ def test_lock_state_func():
 
 @default_routes.get("/test/home")
 @opentrons_execute(msg="Lock acquired until home completes")
-def test_home_func():
-    asyncio.set_event_loop(asyncio.new_event_loop())
-    ctx = opentrons_env.get_protocol_api('2.9')
-    ctx.home()
+def test_home_func(protocol = protocol_ctx_hold()):
+    pass
