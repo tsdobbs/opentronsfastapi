@@ -1,32 +1,23 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-import asyncio
-import opentrons.execute as oe
-import opentrons.simulate as os
-import opentronsfastapi
-
-# Set our opentrons_env to opentrons.simulate
-# On real robots, this would be set to opentrons.execute
-opentronsfastapi.opentrons_env = os
+import opentronsfastapi as otf
 
 app = FastAPI()
+app.include_router(otf.default_routes)
 
 class DispenseWell(BaseModel):
     address: str
 
 @app.post("/api/procedure/demo_procedure")
-@opentronsfastapi.opentrons_execute()
-def demo_procedure(dispenseWell:DispenseWell):
+@otf.opentrons_execute(apiLevel='2.8')
+def demo_procedure(dispenseWell:DispenseWell,
+                   version = otf.ot_flags.protocol_version_flag,
+                   protocol = otf.ot_flags.protocol_context
+                  ):
 
-    # Asyncio must be set to allow the robot to run protocols in 
-    # the background while still responding to API requests
-    asyncio.set_event_loop(asyncio.new_event_loop())
-    ctx = opentronsfastapi.opentrons_env.get_protocol_api('2.9')
-
-    ctx.home()
-    plate = ctx.load_labware("corning_96_wellplate_360ul_flat", 1)
-    tip_rack = ctx.load_labware("opentrons_96_filtertiprack_20ul", 2)
-    p20 = ctx.load_instrument("p20_single_gen2", "left", tip_racks=[tip_rack])
+    plate = protocol.load_labware("corning_96_wellplate_360ul_flat", 1)
+    tip_rack = protocol.load_labware("opentrons_96_filtertiprack_20ul", 2)
+    p20 = protocol.load_instrument("p20_single_gen2", "left", tip_racks=[tip_rack])
 
     p20.pick_up_tip()
 
