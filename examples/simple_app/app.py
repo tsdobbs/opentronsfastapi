@@ -1,16 +1,19 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-import opentronsfastapi
+import opentronsfastapi as otf
 
 app = FastAPI()
-app.include_router(opentronsfastapi.default_routes)
+app.include_router(otf.default_routes)
 
 class DispenseWell(BaseModel):
     address: str
 
 @app.post("/api/procedure/demo_procedure")
-@opentronsfastapi.opentrons_execute(apiLevel='2.8', version_flag='version')
-def demo_procedure(dispenseWell:DispenseWell, version:bool = False, protocol = opentronsfastapi.protocol_ctx_hold()):
+@otf.opentrons_execute(apiLevel='2.8')
+def demo_procedure(dispenseWell:DispenseWell,
+                   version = otf.ot_flags.protocol_version_flag,
+                   protocol = otf.ot_flags.protocol_context
+                  ):
 
     plate = protocol.load_labware("corning_96_wellplate_360ul_flat", 1)
     tip_rack = protocol.load_labware("opentrons_96_filtertiprack_20ul", 2)

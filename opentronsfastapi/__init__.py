@@ -1,5 +1,6 @@
 import math
 import asyncio
+from os import name, stat
 import time
 import threading
 import sqlite3
@@ -88,14 +89,68 @@ class BaseThread(threading.Thread):
         if self.callback is not None:
             self.callback()
 
+
+
+class OT_Flags:
+    """
+    Container for flags that can be added to a protocol and need to be parsed a special way.
+    Each flag has a name that is referenced in the protocol parameters, and a FastAPI.Depends
+    function that is passed to FastAPI when that name is referenced. When a function is passed
+    to the parse method of the object, that function is checked to see if its parameters
+    include any of the defined flags and, if so, the names of those parameters are added to
+    the param_names attribute. This lets us know that those parameters must be treated
+    specially, but don't require that the route use any particular keywords for their parameter
+    names.
+    """
+    param_names = dict()
+    flag_functions = dict()
+
+    def get_flags(self):
+        return list(self.param_names.values())
+
+    def add_flag(self, flag_name, func_to_pass):
+        setattr(self, flag_name, func_to_pass)
+        self.flag_functions[func_to_pass] = flag_name
+
+    #Checks route for special parameters labeled as relevant to opentrons_execute
+    def parse(self, func):
+        for param_name in inspect.signature(func).parameters:
+            default_val = inspect.signature(func).parameters[param_name]._default
+            try:
+                flag = self.flag_functions[default_val]
+                self.param_names[flag] = param_name
+            except KeyError:
+                pass
+        return self.param_names
+
+ot_flags = OT_Flags()
+    
+# Pass a void func to FastAPI as a placeholder until we can load a context into it
+def void_func():
+    pass
+ot_flags.add_flag('protocol_context', Depends(void_func))
+
+def report_version(version_only:bool = False):
+    return version_only
+ot_flags.add_flag('protocol_version_flag', Depends(report_version))
+
+
 #Decorator that executes the function in a seperate thread
-def opentrons_execute(msg = "Execution initiated", apiLevel='2.9', version_flag = None):
+def opentrons_execute(msg = "Execution initiated", apiLevel='2.9'):
     def outer(func):
         @wraps(func)
         async def inner(*args, **kwargs):
+            route_flags = ot_flags.parse(func)
+            
             #Option to return just version hash if specified.
-            if version_flag and version_flag in kwargs and kwargs[version_flag]==True:
+            if 'protocol_version_flag' in route_flags and kwargs[route_flags['protocol_version_flag']]==True:
                 return {"Protocol": func.__name__, "ver": get_protocol_hash(func)}
+
+            try:
+                ctx_name = route_flags['protocol_context']
+                assert ctx_name is not None
+            except AssertionError:
+                return {"Error": "Must pass a protocol context with my_param = opentronsfastapi.ot_flags.protocol_context"}
 
             lock = get_lock(func.__name__)
             if lock == False:
@@ -107,7 +162,7 @@ def opentrons_execute(msg = "Execution initiated", apiLevel='2.9', version_flag 
             try:
                 opentrons_env = os
                 ctx = opentrons_env.get_protocol_api(apiLevel)
-                kwargs['protocol'] = ctx
+                kwargs[ctx_name] = ctx
                 func(*args, **kwargs)
             except Exception as e:
                 unlock()
@@ -115,22 +170,12 @@ def opentrons_execute(msg = "Execution initiated", apiLevel='2.9', version_flag 
             opentrons_env = ot
             ctx = opentrons_env.get_protocol_api(apiLevel)
             ctx.home()
-            kwargs['protocol'] = ctx
+            kwargs[ctx_name] = ctx
 
             BaseThread(target=func, callback=unlock, args=args, kwargs=kwargs).start()
             return {"Message": msg, "ver":get_protocol_hash(func)}
         return inner
     return outer
-
-
-# Placeholder function that allows opentrons_execute to provide a protocol context at runtime
-# A pretty gnarly hack to make FastAPI work in a way it wasn't intended
-# Sending it a "Depends" parameter ensures that param isn't exposed on the server
-# Then at runtime we replace this parameter with the correct protocol context
-def protocol_ctx_hold():
-    def placeholder_func():
-        pass
-    return Depends(placeholder_func)
 
 
 ### Test funcs ####
@@ -145,7 +190,7 @@ def test_unlock():
 
 @default_routes.get("/test/lock")
 @opentrons_execute(msg="Lock acquired for 10 seconds. Will be instant if not executing on real machine")
-def test_lock_func(protocol = protocol_ctx_hold()):
+def test_lock_func(protocol = ot_flags.protocol_context):
     protocol.delay(10)
 
 @default_routes.get("/test/lock_state")
@@ -154,5 +199,5 @@ def test_lock_state_func():
 
 @default_routes.get("/test/home")
 @opentrons_execute(msg="Lock acquired until home completes")
-def test_home_func(protocol = protocol_ctx_hold()):
+def test_home_func(protocol = ot_flags.protocol_context):
     pass
