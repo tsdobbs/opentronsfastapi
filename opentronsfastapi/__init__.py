@@ -106,7 +106,7 @@ class OT_Flags:
     flag_functions = dict()
 
     def get_flags(self):
-        return list(self.param_names.values())
+        return list(self.flag_functions.values())
 
     def add_flag(self, flag_name, func_to_pass):
         setattr(self, flag_name, func_to_pass)
