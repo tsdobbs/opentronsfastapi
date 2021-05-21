@@ -4,6 +4,7 @@ import opentronsfastapi as otf
 
 app = FastAPI()
 app.include_router(otf.default_routes)
+app.include_router(otf.arbitrary_routes)
 
 class DispenseWell(BaseModel):
     address: str

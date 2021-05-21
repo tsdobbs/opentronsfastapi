@@ -1,6 +1,7 @@
 import math
 import asyncio
 from os import name, stat
+import pickle
 import time
 import threading
 import sqlite3
@@ -11,10 +12,11 @@ import opentrons.simulate as os
 from typing import List
 from functools import wraps
 
-from fastapi import FastAPI, APIRouter, Depends
+from fastapi import FastAPI, APIRouter, Depends, File
 
 default_app = FastAPI()
 default_routes = APIRouter()
+arbitrary_routes = APIRouter()
 
 global opentrons_env
 opentrons_env = os
@@ -200,4 +202,30 @@ def test_lock_state_func():
 @default_routes.get("/test/home")
 @opentrons_execute(msg="Lock acquired until home completes")
 def test_home_func(protocol = ot_flags.protocol_context):
+    pass
+
+@arbitrary_routes.post('/arbitrary/protocol')
+#@opentrons_execute(msg="Excuting uploaded protocol")
+def arbitrary_protocol(file: bytes = File(...)):#, protocol = ot_flags.protocol_context):
+    """
+    I tried two approaches here:
+    1) Pickle the function object itself on the client side and send it as form data, then unpickle on the server side and execute
+        This worked-ish, but the bytes that this function received were slightly different than what was sent, so it wasn't valid to unpickle
+        The pickled bytes weren't tooo different, so I think it was a matter of using different encodings, or perhaps because FastAPI
+        assumes you're sending an actual file, not bytes representing a function object and then maybe strips off or adds headers
+    2) Write the function in a .py file, just like you would to upload to the OT2 app. Then have the server look for the "run" function and run it
+        I do think this would work, but FastAPI passed the file as bytes into this function. It's human-readable, but how to import it?
+        All I can think to do is write it back out to a file in the filesystem, then import that, which I don't love.
+        At this point, I wonder if just using OT's HTTP server would meet the same need. Waiting to have a good use case where this is needed.
+    """
+
+    #code used to test method #1
+    #loaded_protocol = pickle.loads(actual_function)
+    #print('protocol loaded')
+
+    #print(inspect.signature(loaded_protocol))
+    
+    #loaded_protocol(protocol)
+    #return len(actual_function)
+
     pass
