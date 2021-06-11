@@ -8,6 +8,7 @@ import inspect
 import hashlib
 import opentrons.execute as oe
 import opentrons.simulate as os
+import opentrons.config
 from typing import List
 from functools import wraps
 
@@ -17,7 +18,10 @@ default_app = FastAPI()
 default_routes = APIRouter()
 
 global opentrons_env
-opentrons_env = os
+if opentrons.config.IS_ROBOT:
+    opentrons_env = oe
+else:
+    opentrons_env = os
 
 # Setup sqlite3 lock
 conn = sqlite3.connect("lock.db")
