@@ -2,6 +2,7 @@ import math
 import asyncio
 from os import name, stat
 import time
+import datetime
 import threading
 import sqlite3
 import inspect
@@ -192,23 +193,34 @@ def opentrons_execute(msg = "Execution initiated", apiLevel='2.9'):
                 func(*args, **kwargs)
             except Exception as e:
                 unlock(lock, "FAILED", "Failed on simulation.")
-                return {"Message": "Failed on simulation. Got error message: {}".format(str(e)), "ver":get_protocol_hash(func)}
+                return {"Message": "Failed on simulation. Got error message: {}".format(str(e)), "id": lock, "ver":get_protocol_hash(func)}
             opentrons_env = ot
             ctx = opentrons_env.get_protocol_api(apiLevel)
             ctx.home()
             kwargs[ctx_name] = ctx
 
             BaseThread(target=func, callback=unlock, callback_args=(lock, "COMPLETED", "Completed protocol successfully."), args=args, kwargs=kwargs).start()
-            return {"Message": msg, "ver":get_protocol_hash(func)}
+            return {"Message": msg, "id": lock, "ver":get_protocol_hash(func)}
         return inner
     return outer
 
 
 ### Test funcs ####
 
-@default_routes.get("/")
-def read_root():
-    return {"Message": "Hello World"}
+@default_routes.get("/status/{run_id}")
+def read_root(run_id: int):
+    conn = sqlite3.connect("lock.db")
+    c_lock = conn.cursor()
+    c_lock.execute("SELECT status, status_message, start, end FROM activity_log WHERE id = ?", (run_id,))
+    rows = c_lock.fetchall()
+    for row in rows:
+        status = row[0]
+        status_message = row[1]
+        start = int(row[2])
+        execution_time = None
+        if status == "FAILED" or status == "COMPLETED":
+            execution_time = int(row[3]) - int(row[2])
+    return {"status": status, "status_message": status_message, "started":datetime.datetime.fromtimestamp(start).strftime("%H:%M:%S. %A %d. %B %Y"), "execution_time": execution_time}
 
 @default_routes.get("/test/unlock")
 def test_unlock():
