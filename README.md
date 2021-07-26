@@ -38,7 +38,6 @@ There are three main touchpoints for most users:
 - `opentronsfastapi.ot_flags.protocol_context` Every protocol **must** specify the variable that will be passed the Protocol Context by setting some value equal to this object in the parameters. This parameter will not be exposed to the API
 - `opentronsfastapi.ot_flags.protocol_version_flag` Optionally, you may set a parameter equal to this obejct. This will expose an option in the API to query the protocol version without actually running the protocol. Protocol versions are reported as hashes of the code, so you can quickly determine if any of the protocol text has changed from what you expected.
 
-
 # opentronsfastapi
 
 opentronsfastapi is a library that allows for FastAPIs to be easily deployed onto Opentrons liquid handling robots (OT2) with robotic protocols. The protocols can be parameterized, allowing complex robotic functions to take place. Communication is done over HTTP via a REST API, and execution of the protocols begins immediately, allowing the OT2 to work as part of a larger lab management system, or simply allowing the user to build a user interface that suits their needs better than the stock options Opentrons provides.
@@ -67,6 +66,16 @@ opentronsfastapi:
 - Better and clearer exception handling of errors
 - Automatic recongition of being deployed on a robot (users shouldn't have to set the `opentrons_env` global variable)
 - Simple git deployment onto robots
+- Hash returns of any individual protocol
+
+## Install with systemd
+```bash
+export IP=xxx.xxx.x.xxx
+ssh root@$IP 'mount -o remount,rw /'
+scp opentronsfastapi.service root@$IP:/etc/systemd/system
+ssh root@$IP 'systemctl enable opentronsfastapi'
+ssh root@$IP 'reboot'
+```
 
 # Contributors
 - Thank you Tim Dobbs for writing most of the README, adding essential wrappers, and generally bringing this project into reality.
